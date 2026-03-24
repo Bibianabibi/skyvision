@@ -294,20 +294,33 @@ body {
 .cd-trigger.open .cd-arrow { transform: rotate(180deg); }
 .cd-menu {
   display: none;
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 100%;
+  position: fixed;
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: var(--r);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  border-radius: var(--r-lg);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   z-index: 9999;
   overflow: hidden;
+  min-width: 200px;
+}
+.cd-menu.open { display: block; }
+.cd-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  background: var(--line-soft);
+}
+.cd-search::placeholder { color: var(--ink-4); }
+.cd-options-wrap {
   max-height: 220px;
   overflow-y: auto;
 }
-.cd-menu.open { display: block; }
+.cd-empty { padding: 12px 14px; font-size: 13px; color: var(--ink-4); text-align: center; }
 .cd-option {
   padding: 9px 14px;
   font-family: var(--sans);
@@ -1130,40 +1143,71 @@ function buildCalendar(){
   updateSummary();
 }
 
-// ── Custom dropdown factory ──
+// ── Searchable dropdown factory ──
 function makeDropdown(opts, placeholder, onChange, extraClass=''){
   const wrap = document.createElement('div');
   wrap.className = 'cd-wrap' + (extraClass ? ' '+extraClass : '');
 
-  // Hidden native select for value storage
+  // Hidden select for value
   const sel = document.createElement('select');
   sel.className = 'row-sel' + (extraClass ? ' '+extraClass : '');
   sel.innerHTML = `<option value="">${placeholder}</option>` +
     opts.map(o=>`<option value="${o.val}">${o.label}</option>`).join('');
 
+  // Trigger button
   const trigger = document.createElement('div');
   trigger.className = 'cd-trigger';
   trigger.setAttribute('tabindex','0');
   trigger.innerHTML = `<span class="cd-label" style="color:var(--ink-4);">${placeholder}</span><span class="cd-arrow"><svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 
+  // Menu with search
   const menu = document.createElement('div');
   menu.className = 'cd-menu';
 
-  // Placeholder option
-  const phOpt = document.createElement('div');
-  phOpt.className = 'cd-option placeholder';
-  phOpt.textContent = placeholder;
-  phOpt.onclick = () => { selectOpt('', placeholder, true); };
-  menu.appendChild(phOpt);
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.className = 'cd-search';
+  searchInput.placeholder = '搜尋...';
+  menu.appendChild(searchInput);
 
-  opts.forEach(o => {
-    const item = document.createElement('div');
-    item.className = 'cd-option';
-    item.textContent = o.label;
-    item.dataset.val = o.val;
-    item.onclick = () => selectOpt(o.val, o.label, false);
-    menu.appendChild(item);
+  const optionsWrap = document.createElement('div');
+  optionsWrap.className = 'cd-options-wrap';
+  menu.appendChild(optionsWrap);
+
+  function renderOptions(filter=''){
+    optionsWrap.innerHTML = '';
+    const filtered = filter
+      ? opts.filter(o => o.label.toLowerCase().includes(filter.toLowerCase()))
+      : opts;
+    if(!filtered.length){
+      const empty = document.createElement('div');
+      empty.className = 'cd-empty';
+      empty.textContent = '無符合選項';
+      optionsWrap.appendChild(empty);
+      return;
+    }
+    // Clear option
+    const clr = document.createElement('div');
+    clr.className = 'cd-option placeholder';
+    clr.textContent = placeholder;
+    clr.onclick = () => selectOpt('', placeholder, true);
+    optionsWrap.appendChild(clr);
+    filtered.forEach(o => {
+      const item = document.createElement('div');
+      item.className = 'cd-option' + (sel.value===o.val ? ' selected' : '');
+      item.textContent = o.label;
+      item.dataset.val = o.val;
+      item.onclick = () => selectOpt(o.val, o.label, false);
+      optionsWrap.appendChild(item);
+    });
+  }
+  renderOptions();
+
+  searchInput.addEventListener('input', e => {
+    e.stopPropagation();
+    renderOptions(searchInput.value);
   });
+  searchInput.addEventListener('click', e => e.stopPropagation());
 
   function selectOpt(val, label, isPlaceholder){
     sel.value = val;
@@ -1171,30 +1215,39 @@ function makeDropdown(opts, placeholder, onChange, extraClass=''){
     labelEl.textContent = isPlaceholder ? placeholder : label;
     labelEl.style.color = isPlaceholder ? 'var(--ink-4)' : 'var(--ink)';
     trigger.classList.toggle('filled', !isPlaceholder);
-    // update selected state
-    menu.querySelectorAll('.cd-option').forEach(el => {
+    optionsWrap.querySelectorAll('.cd-option').forEach(el => {
       el.classList.toggle('selected', el.dataset.val === val && !isPlaceholder);
     });
     closeMenu();
     if(onChange) onChange(val);
   }
 
-  function openMenu(){
-    trigger.classList.add('open');
-    menu.classList.add('open');
-    // Use fixed positioning to escape any overflow:hidden parent
+  function positionMenu(){
     const rect = trigger.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    menu.style.position = 'fixed';
-    menu.style.width = rect.width + 'px';
+    menu.style.width = Math.max(rect.width, 220) + 'px';
     menu.style.left = rect.left + 'px';
-    if(spaceBelow < 180){
+    if(spaceBelow < 280){
       menu.style.top = 'auto';
       menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
     } else {
       menu.style.bottom = 'auto';
       menu.style.top = (rect.bottom + 4) + 'px';
     }
+  }
+
+  function openMenu(){
+    // Close all other menus first
+    document.querySelectorAll('.cd-menu.open').forEach(m => {
+      m.classList.remove('open');
+      m.closest('.cd-wrap')?.querySelector('.cd-trigger')?.classList.remove('open');
+    });
+    trigger.classList.add('open');
+    menu.classList.add('open');
+    positionMenu();
+    searchInput.value = '';
+    renderOptions();
+    setTimeout(() => searchInput.focus(), 50);
   }
   function closeMenu(){
     trigger.classList.remove('open');
@@ -1203,20 +1256,17 @@ function makeDropdown(opts, placeholder, onChange, extraClass=''){
 
   trigger.onclick = (e) => {
     e.stopPropagation();
-    const isOpen = menu.classList.contains('open');
-    // close all other open dropdowns
-    document.querySelectorAll('.cd-menu.open').forEach(m => {
-      m.classList.remove('open');
-      m.previousElementSibling?.classList.remove('open');
-    });
-    if(!isOpen) openMenu();
+    menu.classList.contains('open') ? closeMenu() : openMenu();
   };
   trigger.onkeydown = (e) => {
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); trigger.click(); }
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openMenu(); }
     if(e.key==='Escape') closeMenu();
   };
 
-  // expose getValue / setValue
+  // Reposition on scroll/resize
+  window.addEventListener('scroll', () => { if(menu.classList.contains('open')) positionMenu(); }, true);
+  window.addEventListener('resize', () => { if(menu.classList.contains('open')) positionMenu(); });
+
   wrap._getSel = () => sel;
   wrap._setValue = (val) => {
     const opt = opts.find(o=>o.val===val);
@@ -1230,11 +1280,11 @@ function makeDropdown(opts, placeholder, onChange, extraClass=''){
   return wrap;
 }
 
-// Close dropdowns on outside click
-document.addEventListener('click', ()=>{
-  document.querySelectorAll('.cd-menu.open').forEach(m=>{
+// Close on outside click
+document.addEventListener('click', () => {
+  document.querySelectorAll('.cd-menu.open').forEach(m => {
     m.classList.remove('open');
-    m.previousElementSibling?.classList.remove('open');
+    m.closest('.cd-wrap')?.querySelector('.cd-trigger')?.classList.remove('open');
   });
 });
 
