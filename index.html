@@ -938,8 +938,38 @@ const S = {
   records:  JSON.parse(localStorage.getItem('wl_rec')  || '[]'),
   projects: JSON.parse(localStorage.getItem('wl_proj') || '[]'),
   names:    JSON.parse(localStorage.getItem('wl_names')|| '[]'),
-  lark:     JSON.parse(localStorage.getItem('wl_lark') || '{}'),
-  fields:   JSON.parse(localStorage.getItem('wl_flds') || '{}'),
+  // Central config — always use these defaults, localStorage only for admin overrides
+  lark: (()=>{
+    const DEFAULTS = {
+      appId:     'cli_a938895f65f8deed',
+      appSecret: 'EJFXLNNePvsGU2K4BxPQ1fvvOEdHZ1OS',
+      base:      'LwFubC2H4a99gysF14clw4qsgZ2',
+      table:     'tblkBMozDPUxkvz3',
+      projTable: 'tblFQrKBIQLeDpHP',
+      contTable: 'tblbeI3NgXTZnrNz',
+    };
+    const saved = JSON.parse(localStorage.getItem('wl_lark') || '{}');
+    // Merge: saved values override defaults (for admin customisation)
+    // But always fall back to defaults if saved value is empty
+    return {
+      appId:     saved.appId     || DEFAULTS.appId,
+      appSecret: saved.appSecret || DEFAULTS.appSecret,
+      base:      saved.base      || DEFAULTS.base,
+      table:     saved.table     || DEFAULTS.table,
+      projTable: saved.projTable || DEFAULTS.projTable,
+      contTable: saved.contTable || DEFAULTS.contTable,
+    };
+  })(),
+  fields: (()=>{
+    const FIELD_DEFAULTS = {
+      date:'日期', name:'姓名', proj:'專案名稱',
+      cont:'工作內容', slot:'時段', hour:'時數（小時）'
+    };
+    const saved = JSON.parse(localStorage.getItem('wl_flds') || '{}');
+    return Object.keys(FIELD_DEFAULTS).reduce((acc,k)=>{
+      acc[k] = saved[k] || FIELD_DEFAULTS[k]; return acc;
+    }, {});
+  })(),
   pw:       '1234',
   currentName: localStorage.getItem('wl_curname') || '',
   extraRows: [],
