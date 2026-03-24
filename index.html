@@ -1841,7 +1841,15 @@ function saveSettings(){
 }
 async function getLarkToken(){
   const l=S.lark; if(!l.appId||!l.appSecret)return null;
-  try{const r=await fetch('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:l.appId,app_secret:l.appSecret})});const d=await r.json();return d.tenant_access_token||null;}catch{return null;}
+  try{
+    const r=await fetch('https://lark-proxy.ho-bibiana.workers.dev/lark/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({app_id:l.appId,app_secret:l.appSecret})
+    });
+    const d=await r.json();
+    return d.tenant_access_token||null;
+  }catch(e){console.error('[Token]',e);return null;}
 }
 async function pushToLark(rec){
   const l=S.lark,f=S.fields; if(!l.appId||!l.base||!l.table)return false;
@@ -1849,27 +1857,24 @@ async function pushToLark(rec){
     const tok=await getLarkToken();
     if(!tok){ toast('無法取得 Lark Token，請確認 App ID / Secret','err'); return false; }
     const fields={};
-    // Lark date fields require millisecond timestamp
-    const dateTs = new Date(rec.date + 'T00:00:00+08:00').getTime();
-    fields[f.date||'日期']=dateTs;
+    fields[f.date||'日期']=rec.date;
     fields[f.name||'姓名']=rec.name;
     fields[f.proj||'專案名稱']=rec.project;
     fields[f.cont||'工作內容']=rec.content;
     fields[f.slot||'時段']=rec.slots;
     fields[f.hour||'時數（小時）']=rec.hours;
     console.log('[Lark] 送出欄位:', JSON.stringify(fields));
-    const r=await fetch(
-      `https://open.larksuite.com/open-apis/bitable/v1/apps/${l.base}/tables/${l.table}/records`,
-      {method:'POST', headers:{'Authorization':'Bearer '+tok,'Content-Type':'application/json'}, body:JSON.stringify({fields})}
-    );
+    const r=await fetch('https://lark-proxy.ho-bibiana.workers.dev/lark/records',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:tok, base:l.base, table:l.table, fields})
+    });
     const d=await r.json();
     console.log('[Lark] 回應:', JSON.stringify(d));
     if(d.code===0){
       return true;
-    } else {
-      // Show detailed error
-      const msg = d.msg || JSON.stringify(d);
-      toast('Lark 錯誤 '+d.code+'：'+msg, 'err');
+    }else{
+      toast('Lark 錯誤 '+d.code+'：'+(d.msg||''), 'err');
       console.error('[Lark] 錯誤碼', d.code, d.msg, d);
       return false;
     }
@@ -1884,9 +1889,26 @@ async function syncFromLark(){
   toast('同步中...');
   try{
     const tok=await getLarkToken(); if(!tok){toast('取得授權失敗','err');return;}
-    const r=await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${l.base}/tables/${l.table}/records?page_size=100`,{headers:{'Authorization':'Bearer '+tok}});
-    const d=await r.json(); if(d.code!==0){toast('同步失敗','err');return;}
-    S.records=(d.data?.items||[]).map(item=>{const fd=item.fields;return{id:item.record_id,date:fd[f.date||'日期']||'',name:fd[f.name||'姓名']||'',project:fd[f.proj||'專案名稱']||'',content:fd[f.cont||'工作內容']||'',slots:fd[f.slot||'時段']||'',hours:Number(fd[f.hour||'時數（小時）'])||0,createdAt:item.created_time||''};});
+    const r=await fetch(`https://lark-proxy.ho-bibiana.workers.dev/lark/records?token=${tok}&base=${l.base}&table=${l.table}`);
+    const d=await r.json();
+    if(d.code!==0){toast('同步失敗：'+(d.msg||d.code),'err');return;}
+    S.records=(d.data?.items||[]).map(item=>{
+      const fd=item.fields;
+      const rawDate = fd[f.date||'日期'];
+      const dateStr = typeof rawDate==='number'
+        ? new Date(rawDate).toISOString().slice(0,10)
+        : (rawDate||'');
+      return{
+        id:item.record_id,
+        date:dateStr,
+        name:fd[f.name||'姓名']||'',
+        project:fd[f.proj||'專案名稱']||'',
+        content:fd[f.cont||'工作內容']||'',
+        slots:fd[f.slot||'時段']||'',
+        hours:Number(fd[f.hour||'時數（小時）'])||0,
+        createdAt:item.created_time||''
+      };
+    });
     save(); renderRecords(); toast(`同步完成，共 ${S.records.length} 筆`,'ok');
   }catch(e){toast('錯誤：'+e.message,'err');}
 }
@@ -1895,7 +1917,11 @@ async function testLark(){
   if(!S.lark.appId||!S.lark.appSecret){toast('請填寫 App ID 和 Secret','err');return;}
   toast('測試中...');
   const tok=await getLarkToken();
-  tok?toast('連線成功','ok'):toast('連線失敗，請確認憑證','err');
+  if(tok){
+    toast('連線成功！Token 已取得', 'ok');
+  } else {
+    toast('連線失敗，請確認 App ID / Secret 及 Worker 是否正常', 'err');
+  }
 }
 
 // ════════════════════════════════════════
