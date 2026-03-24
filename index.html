@@ -302,7 +302,7 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-  z-index: 300;
+  z-index: 9999;
   overflow: hidden;
   max-height: 220px;
   overflow-y: auto;
@@ -756,7 +756,10 @@ body {
       <!-- Projects -->
       <div class="section-hdr">
         <div class="section-title">專案名稱管理</div>
-        <button class="btn btn-primary" onclick="openProjModal()">新增專案</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="syncProjectsFromLark().then(()=>renderProjects())">從 Lark 同步</button>
+          <button class="btn btn-primary" onclick="openProjModal()">新增專案</button>
+        </div>
       </div>
       <div class="card" style="margin-bottom:28px;">
         <div style="overflow-x:auto;">
@@ -770,7 +773,10 @@ body {
       <!-- Work Content -->
       <div class="section-hdr">
         <div class="section-title">工作內容選項管理</div>
-        <button class="btn btn-primary" onclick="openContModal()">新增選項</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="syncContentsFromLark().then(()=>renderCustomContentList())">從 Lark 同步</button>
+          <button class="btn btn-primary" onclick="openContModal()">新增選項</button>
+        </div>
       </div>
       <div class="card">
         <div style="overflow-x:auto;">
@@ -796,7 +802,8 @@ body {
             <div class="cfg-group"><label>App Secret</label><input type="text" id="sAppSecret" placeholder="xxxxxxxxxxxxxxxx"></div>
             <div class="cfg-group"><label>Base Token（多維表格 ID）</label><input type="text" id="sBase" placeholder="bascnxxxxxxx"><div class="cfg-note">多維表格網址 /base/ 後的字串</div></div>
             <div class="cfg-group"><label>工作日誌 Table ID</label><input type="text" id="sTable" placeholder="tblxxxxxxx"></div>
-            <div class="cfg-group" style="grid-column:span 2;"><label>專案清單 Table ID（選填）</label><input type="text" id="sProjTable" placeholder="tblxxxxxxx"></div>
+            <div class="cfg-group"><label>專案清單 Table ID</label><input type="text" id="sProjTable" placeholder="tblxxxxxxx"></div>
+            <div class="cfg-group"><label>工作內容清單 Table ID</label><input type="text" id="sContTable" placeholder="tblxxxxxxx"></div>
           </div>
         </div>
       </div>
@@ -1035,6 +1042,9 @@ function init(){
   buildCalendar();
   loadSettingsUI();
   initStatsMonth();
+  // Auto-sync projects from Lark if configured
+  syncProjectsFromLark();
+  syncContentsFromLark();
 }
 
 // ════════════════════════════════════════
@@ -1172,11 +1182,19 @@ function makeDropdown(opts, placeholder, onChange, extraClass=''){
   function openMenu(){
     trigger.classList.add('open');
     menu.classList.add('open');
-    // position above if not enough space below
-    const rect = wrap.getBoundingClientRect();
+    // Use fixed positioning to escape any overflow:hidden parent
+    const rect = trigger.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    menu.style.top = spaceBelow < 150 ? 'auto' : 'calc(100% + 4px)';
-    menu.style.bottom = spaceBelow < 150 ? 'calc(100% + 4px)' : 'auto';
+    menu.style.position = 'fixed';
+    menu.style.width = rect.width + 'px';
+    menu.style.left = rect.left + 'px';
+    if(spaceBelow < 180){
+      menu.style.top = 'auto';
+      menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    } else {
+      menu.style.bottom = 'auto';
+      menu.style.top = (rect.bottom + 4) + 'px';
+    }
   }
   function closeMenu(){
     trigger.classList.remove('open');
@@ -1711,16 +1729,30 @@ function openProjModal(id){
   document.getElementById('projModal').classList.add('open');
 }
 function closeProjModal(){ document.getElementById('projModal').classList.remove('open'); }
-function saveProject(){
+async function saveProject(){
   const name=document.getElementById('pmName').value.trim();
   if(!name){toast('請輸入專案名稱','err');return;}
-  if(editProjId){const p=S.projects.find(x=>x.id===editProjId);p.name=name;p.desc=document.getElementById('pmDesc').value.trim();}
-  else S.projects.push({id:uid(),name,desc:document.getElementById('pmDesc').value.trim(),created:today(),active:true});
+  if(editProjId){
+    const p=S.projects.find(x=>x.id===editProjId);
+    p.name=name; p.desc=document.getElementById('pmDesc').value.trim();
+  } else {
+    const larkId = await pushProjectToLark(name);
+    S.projects.push({
+      id: larkId || uid(),
+      name, desc: document.getElementById('pmDesc').value.trim(),
+      created: today(), active: true, larkId
+    });
+  }
   save(); buildCalendar(); renderProjects(); closeProjModal();
   toast(editProjId?'已更新':'已新增專案','ok');
 }
 function toggleProj(id){const p=S.projects.find(x=>x.id===id);p.active=!p.active;save();buildCalendar();renderProjects();}
-function deleteProj(id){S.projects=S.projects.filter(x=>x.id!==id);save();buildCalendar();renderProjects();refreshContentSelects();toast('已刪除');}
+function deleteProj(id){
+  const p = S.projects.find(x=>x.id===id);
+  if(p && p.larkId) deleteProjectFromLark(p.larkId);
+  S.projects=S.projects.filter(x=>x.id!==id);
+  save();buildCalendar();renderProjects();refreshContentSelects();toast('已刪除');
+}
 function renderProjects(){
   const tbody=document.getElementById('projBody'); if(!tbody)return;
   if(!S.projects.length){tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state">尚無專案</div></td></tr>`;return;}
@@ -1760,7 +1792,7 @@ function openContModal(id, isDefault){
 }
 function closeContModal(){ document.getElementById('contModal').classList.remove('open'); }
 
-function saveContItem(){
+async function saveContItem(){
   const name = document.getElementById('cmName').value.trim();
   if(!name){ toast('請輸入工作內容名稱','err'); return; }
   if(editContId){
@@ -1770,7 +1802,8 @@ function saveContItem(){
   } else {
     const all = [...S.defaultContents, ...S.customContents];
     if(all.find(o=>o.label===name)){ toast('此選項已存在','err'); return; }
-    S.customContents.push({ id:uid(), val:name, label:name, active:true, created:today() });
+    const larkId = await pushContentToLark(name);
+    S.customContents.push({ id:larkId||uid(), val:name, label:name, active:true, created:today(), larkId });
   }
   save(); renderCustomContentList(); refreshContentSelects(); closeContModal();
   toast(editContId?'已更新':'已新增：'+name, 'ok');
@@ -1786,6 +1819,8 @@ function toggleContItem(id, isDefault){
   save(); renderCustomContentList(); refreshContentSelects();
 }
 function deleteCustomContent(id){
+  const c = S.customContents.find(x=>x.id===id);
+  if(c && c.larkId) deleteContentFromLark(c.larkId);
   S.customContents = S.customContents.filter(c=>c.id!==id);
   save(); renderCustomContentList(); refreshContentSelects();
   toast('已刪除', 'ok');
@@ -1830,15 +1865,159 @@ function loadSettingsUI(){
   if(l.base)document.getElementById('sBase').value=l.base;
   if(l.table)document.getElementById('sTable').value=l.table;
   if(l.projTable)document.getElementById('sProjTable').value=l.projTable;
+  if(l.contTable)document.getElementById('sContTable').value=l.contTable;
   ['date','name','proj','cont','slot','hour'].forEach(k=>{const el=document.getElementById('f_'+k);if(el&&f[k])el.value=f[k];});
 }
 function saveSettings(){
-  S.lark={appId:document.getElementById('sAppId').value.trim(),appSecret:document.getElementById('sAppSecret').value.trim(),base:document.getElementById('sBase').value.trim(),table:document.getElementById('sTable').value.trim(),projTable:document.getElementById('sProjTable').value.trim()};
+  S.lark={appId:document.getElementById('sAppId').value.trim(),appSecret:document.getElementById('sAppSecret').value.trim(),base:document.getElementById('sBase').value.trim(),table:document.getElementById('sTable').value.trim(),projTable:document.getElementById('sProjTable').value.trim(),contTable:document.getElementById('sContTable').value.trim()};
   S.fields={};['date','name','proj','cont','slot','hour'].forEach(k=>{S.fields[k]=document.getElementById('f_'+k).value;});
   localStorage.setItem('wl_lark',JSON.stringify(S.lark));
   localStorage.setItem('wl_flds',JSON.stringify(S.fields));
   toast('已儲存設定','ok');
 }
+async function syncProjectsFromLark(){
+  const l = S.lark;
+  if(!l.appId || !l.base || !l.projTable) return;
+  try{
+    const tok = await getLarkToken();
+    if(!tok) return;
+    const r = await fetch(`https://lark-proxy.ho-bibiana.workers.dev/lark/records?token=${tok}&base=${l.base}&table=${l.projTable}`);
+    const d = await r.json();
+    if(d.code !== 0){ console.log('[syncProjects] Lark error:', d.msg); return; }
+    const items = d.data?.items || [];
+    if(!items.length) return;
+    // Rebuild projects from Lark project table
+    const larkProjects = items
+      .map(item => item.fields['專案名稱'] || item.fields[Object.keys(item.fields)[0]])
+      .filter(Boolean);
+    // Replace local list with Lark list (keep record_id for future updates)
+    S.projects = items.map(item => ({
+      id: item.record_id,
+      name: item.fields['專案名稱'] || item.fields[Object.keys(item.fields)[0]] || '',
+      desc: item.fields['描述'] || '',
+      created: today(),
+      active: true,
+      larkId: item.record_id,
+    })).filter(p => p.name);
+    localStorage.setItem('wl_proj', JSON.stringify(S.projects));
+    buildCalendar();
+    const fp = document.getElementById('fProject');
+    if(fp) fp.innerHTML = '<option value="">所有專案</option>' + S.projects.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+    console.log('[syncProjects] 已同步', S.projects.length, '個專案');
+  }catch(e){
+    console.log('[syncProjects] error:', e.message);
+  }
+}
+
+async function syncContentsFromLark(){
+  const l = S.lark;
+  if(!l.appId || !l.base || !l.contTable) return;
+  try{
+    const tok = await getLarkToken();
+    if(!tok) return;
+    const r = await fetch(`https://lark-proxy.ho-bibiana.workers.dev/lark/records?token=${tok}&base=${l.base}&table=${l.contTable}`);
+    const d = await r.json();
+    if(d.code !== 0){ console.log('[syncContents] error:', d.msg); return; }
+    const items = d.data?.items || [];
+    if(!items.length) return;
+    // Rebuild contents from Lark
+    const larkConts = items.map(item => ({
+      id: item.record_id,
+      val: item.fields['工作內容'] || item.fields[Object.keys(item.fields)[0]] || '',
+      label: item.fields['工作內容'] || item.fields[Object.keys(item.fields)[0]] || '',
+      active: true,
+      larkId: item.record_id,
+    })).filter(c => c.val);
+    S.customContents = larkConts;
+    // Clear defaults that are now managed by Lark
+    localStorage.setItem('wl_ccont', JSON.stringify(S.customContents));
+    refreshContentSelects();
+    console.log('[syncContents] 已同步', S.customContents.length, '個工作內容');
+  }catch(e){
+    console.log('[syncContents] error:', e.message);
+  }
+}
+
+async function pushContentToLark(val){
+  const l = S.lark;
+  if(!l.appId || !l.base || !l.contTable) return null;
+  try{
+    const tok = await getLarkToken();
+    if(!tok) return null;
+    const r = await fetch('https://lark-proxy.ho-bibiana.workers.dev/lark/records', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        token: tok,
+        base: l.base,
+        table: l.contTable,
+        fields: {'工作內容': val}
+      })
+    });
+    const d = await r.json();
+    if(d.code === 0) return d.data?.record?.record_id || null;
+    console.log('[pushContent] error:', d.msg);
+    return null;
+  }catch(e){
+    console.log('[pushContent] error:', e.message);
+    return null;
+  }
+}
+
+async function deleteContentFromLark(larkId){
+  const l = S.lark;
+  if(!l.appId || !l.base || !l.contTable || !larkId) return;
+  try{
+    const tok = await getLarkToken();
+    if(!tok) return;
+    await fetch('https://lark-proxy.ho-bibiana.workers.dev/lark/record', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token: tok, base: l.base, table: l.contTable, recordId: larkId})
+    });
+  }catch(e){}
+}
+
+async function pushProjectToLark(name){
+  const l = S.lark;
+  if(!l.appId || !l.base || !l.projTable) return null;
+  try{
+    const tok = await getLarkToken();
+    if(!tok) return null;
+    const r = await fetch('https://lark-proxy.ho-bibiana.workers.dev/lark/records', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        token: tok,
+        base: l.base,
+        table: l.projTable,
+        fields: {'專案名稱': name}
+      })
+    });
+    const d = await r.json();
+    if(d.code === 0) return d.data?.record?.record_id || null;
+    console.log('[pushProject] error:', d.msg);
+    return null;
+  }catch(e){
+    console.log('[pushProject] error:', e.message);
+    return null;
+  }
+}
+
+async function deleteProjectFromLark(larkId){
+  const l = S.lark;
+  if(!l.appId || !l.base || !l.projTable || !larkId) return;
+  try{
+    const tok = await getLarkToken();
+    if(!tok) return;
+    await fetch('https://lark-proxy.ho-bibiana.workers.dev/lark/record', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token: tok, base: l.base, table: l.projTable, recordId: larkId})
+    });
+  }catch(e){}
+}
+
 async function getLarkToken(){
   const l=S.lark; if(!l.appId||!l.appSecret)return null;
   try{
