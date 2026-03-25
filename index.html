@@ -1207,9 +1207,12 @@ async function pushToLark(rec){
   try{
     const tok=await getLarkToken(); if(!tok)return false;
     const fields={};
-    fields[f.date||'日期']=rec.date; // plain string e.g. '2026-03-24' fields[f.name||'姓名']=rec.name;
-    fields[f.proj||'專案名稱']=rec.project; fields[f.cont||'工作內容']=rec.content;
-    fields[f.slot||'時段']=rec.slots; fields[f.hour||'時數（小時）']=rec.hours;
+    fields[f.date||'日期']  = rec.date;
+    fields[f.name||'姓名']  = rec.name;
+    fields[f.proj||'專案名稱'] = rec.project;
+    fields[f.cont||'工作內容'] = rec.content;
+    fields[f.slot||'時段']  = rec.slots;
+    fields[f.hour||'時數（小時）'] = rec.hours;
     const r=await fetch(`${PROXY}/lark/records`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:tok,base:l.base,table:l.table,fields})});
     const d=await r.json(); if(d.code!==0){console.error('[Lark]',d.code,d.msg);} return d.code===0;
   }catch(e){ console.error('[pushToLark]',e.message); return false; }
