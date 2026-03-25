@@ -265,18 +265,24 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14p
     <div class="form-card">
       <div class="form-card-title">新增時段紀錄</div>
 
-      <!-- Row 1: Time -->
-      <div class="field-row">
+      <!-- Row 1: Time + Presets in one clean grid -->
+      <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:12px;align-items:end;margin-bottom:14px;">
         <div class="field">
           <label>開始時間</label>
           <select id="entryStart" class="time-sel" onchange="calcHours()"></select>
         </div>
-        <div class="time-arrow">→</div>
+        <div style="padding-bottom:8px;color:var(--ink-4);font-size:15px;">→</div>
         <div class="field">
           <label>結束時間</label>
           <select id="entryEnd" class="time-sel" onchange="calcHours()"></select>
         </div>
-        <div class="hours-pill" id="hoursPill">0h</div>
+        <div class="hours-pill" id="hoursPill" style="height:38px;display:flex;align-items:center;">0h</div>
+        <div></div>
+      </div>
+      <!-- Quick presets -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:600;color:var(--ink-4);letter-spacing:.06em;text-transform:uppercase;flex-shrink:0;">快選</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="presetBtns"></div>
       </div>
 
       <!-- Row 2: Project + Content -->
@@ -337,16 +343,46 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14p
   <div class="inner" style="max-width:1100px;">
 
     <!-- Controls -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
       <div class="section-title" style="flex:1;min-width:120px;">時數統計</div>
-      <select id="statsMonth" style="padding:7px 11px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--sans);font-size:13px;outline:none;background:#fff;" onchange="renderStats()"></select>
-      <div style="display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;">
-        <button id="vbtn-project" class="view-btn active" onclick="switchView('project')">按專案</button>
-        <button id="vbtn-person"  class="view-btn"        onclick="switchView('person')">按人員</button>
-        <button id="vbtn-date"    class="view-btn"        onclick="switchView('date')">按日期</button>
-      </div>
-      <input type="text" id="statsQ" placeholder="搜尋專案或人員..." style="padding:7px 11px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--sans);font-size:13px;outline:none;width:160px;" oninput="renderStats()">
       <button class="btn btn-sm" onclick="exportStatsCSV()">匯出統計 CSV</button>
+    </div>
+
+    <!-- Filter bar -->
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 18px;margin-bottom:18px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+      <!-- Date range -->
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;">月份區間</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <select id="statsMonthFrom" style="padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--sans);font-size:13px;outline:none;background:#fff;" onchange="renderStats()"></select>
+          <span style="color:var(--ink-4);font-size:13px;">至</span>
+          <select id="statsMonthTo" style="padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--sans);font-size:13px;outline:none;background:#fff;" onchange="renderStats()"></select>
+        </div>
+      </div>
+      <!-- Project dropdown -->
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;">案件名稱</label>
+        <select id="statsQProj" style="padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--sans);font-size:13px;outline:none;background:#fff;width:180px;" onchange="renderStats()">
+          <option value="">全部案件</option>
+        </select>
+      </div>
+      <!-- Name input -->
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;">姓名</label>
+        <select id="statsQName" style="padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--sans);font-size:13px;outline:none;background:#fff;width:140px;" onchange="renderStats()">
+          <option value="">全部人員</option>
+        </select>
+      </div>
+      <!-- View toggle -->
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;">顯示方式</label>
+        <div style="display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;">
+          <button id="vbtn-project" class="view-btn active" onclick="switchView('project')">按專案</button>
+          <button id="vbtn-person"  class="view-btn"        onclick="switchView('person')">按人員</button>
+          <button id="vbtn-date"    class="view-btn"        onclick="switchView('date')">按日期</button>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="clearStatsSearch()" style="align-self:flex-end;">清除篩選</button>
     </div>
 
     <!-- Summary cards -->
@@ -568,19 +604,81 @@ function save(){
 //  TIME OPTIONS
 // ════════════════════════════════════════
 function buildTimeSelects(){
-  const times = [];
-  for(let h=8;h<24;h++){ times.push(`${String(h).padStart(2,'0')}:00`); times.push(`${String(h).padStart(2,'0')}:30`); }
-  times.push('00:00');
+  // Main: 08:30–19:00 (every 30 min)
+  const mainTimes = [];
+  const addTime = (h,m) => mainTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  for(let h=8;h<=19;h++){
+    if(h===8){ addTime(8,30); }
+    else if(h===19){ addTime(19,0); }
+    else{ addTime(h,0); addTime(h,30); }
+  }
+
+  // Early: 07:00–08:30
+  const earlyTimes = ['07:00','07:30','08:00','08:30'];
+
+  // Late: 19:00–23:30
+  const lateTimes = [];
+  for(let h=19;h<=23;h++){ lateTimes.push(`${h}:00`); lateTimes.push(`${h}:30`); }
+
+  const allTimes = [...new Set([...earlyTimes, ...mainTimes, ...lateTimes])];
+
   const startSel = document.getElementById('entryStart');
   const endSel   = document.getElementById('entryEnd');
-  times.forEach((t,i) => {
-    startSel.innerHTML += `<option value="${t}">${t}</option>`;
-    if(i>0) endSel.innerHTML += `<option value="${t}">${t}</option>`;
+  startSel.innerHTML = '';
+  endSel.innerHTML   = '';
+
+  // Flat options, no group labels
+  const allStart = [...earlyTimes, ...mainTimes, ...lateTimes];
+  const allEnd   = ['07:30','08:00','08:30', ...mainTimes.slice(1), ...lateTimes.slice(1), '00:00'];
+  const unique = arr => [...new Set(arr)];
+
+  unique(allStart).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    startSel.appendChild(o);
   });
-  // Default: 08:00 → 09:00
-  startSel.value = '08:00';
-  endSel.value   = '09:00';
+  unique(allEnd).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    endSel.appendChild(o);
+  });
+
+  // Default: 08:30 → 09:30
+  startSel.value = '08:30';
+  endSel.value   = '09:30';
   calcHours();
+
+  // Build preset buttons
+  buildPresets();
+}
+
+function buildPresets(){
+  const wrap = document.getElementById('presetBtns');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+
+  const slots = [
+    {s:'08:30',e:'12:00', color:'#2563EB', bg:'#EFF6FF', rim:'#BFDBFE'},
+    {s:'09:30',e:'12:00', color:'#7C3AED', bg:'#F5F3FF', rim:'#DDD6FE'},
+    {s:'13:30',e:'15:00', color:'#059669', bg:'#D1FAE5', rim:'#6EE7B7'},
+    {s:'15:00',e:'17:00', color:'#D97706', bg:'#FEF3C7', rim:'#FDE68A'},
+    {s:'17:00',e:'19:00', color:'#DC2626', bg:'#FEE2E2', rim:'#FECACA'},
+  ];
+
+  slots.forEach(({s,e,color,bg,rim}) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = `padding:6px 12px;border-radius:7px;border:1px solid ${rim};background:${bg};color:${color};font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .12s;`;
+    btn.textContent = `${s}–${e}`;
+    btn.onmouseenter = () => { btn.style.background = color; btn.style.color = '#fff'; btn.style.borderColor = color; };
+    btn.onmouseleave = () => { btn.style.background = bg; btn.style.color = color; btn.style.borderColor = rim; };
+    btn.onclick = () => {
+      document.getElementById('entryStart').value = s;
+      document.getElementById('entryEnd').value = e;
+      calcHours();
+    };
+    wrap.appendChild(btn);
+  });
 }
 
 function calcHours(){
@@ -825,6 +923,16 @@ let pdTab='people';
 let pdCurrentData=null;
 
 function switchView(v){ statsView=v; document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active')); document.getElementById('vbtn-'+v)?.classList.add('active'); renderStats(); }
+function clearStatsSearch(){
+  const p=document.getElementById('statsQProj'); if(p)p.value='';
+  const n=document.getElementById('statsQName'); if(n)n.value='';
+  const f=document.getElementById('statsMonthFrom');
+  const t=document.getElementById('statsMonthTo');
+  const months=[...document.querySelectorAll('#statsMonthFrom option')].map(o=>o.value).sort();
+  if(f&&months.length) f.value=months[0];
+  if(t) t.value=today().slice(0,7);
+  renderStats();
+}
 
 function switchPdTab(t){
   pdTab=t;
@@ -887,9 +995,13 @@ function renderPdContent({proj, info}){
 }
 
 function exportStatsCSV(){
-  const sel = document.getElementById('statsMonth');
-  const m = sel?.value || today().slice(0,7);
-  const data = S.records.filter(r=>r.date.startsWith(m));
+  const mFrom=document.getElementById('statsMonthFrom')?.value||today().slice(0,7);
+  const mTo  =document.getElementById('statsMonthTo')?.value  ||today().slice(0,7);
+  const qProj=document.getElementById('statsQProj')?.value||'';
+  const qName=document.getElementById('statsQName')?.value||'';
+  let data=S.records.filter(r=>{ const m=r.date?.slice(0,7)||''; return m>=mFrom&&m<=mTo; });
+  if(qProj) data=data.filter(r=>r.project===qProj);
+  if(qName) data=data.filter(r=>r.name===qName);
   // Build project summary
   const map = {};
   data.forEach(r=>{
@@ -897,28 +1009,70 @@ function exportStatsCSV(){
     if(!map[r.project][r.name]) map[r.project][r.name]=0;
     map[r.project][r.name]+=r.hours;
   });
-  let csv = '月份,專案名稱,姓名,時數\n';
+  let csv = '月份區間,專案名稱,姓名,時數\n';
   Object.entries(map).sort().forEach(([proj,people])=>{
     Object.entries(people).sort().forEach(([name,h])=>{
-      csv += `${m},${proj},${name},${h}\n`;
+      csv += `${mFrom}–${mTo},${proj},${name},${h}\n`;
     });
   });
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
-  a.download=`時數統計_${m}.csv`; a.click();
+  a.download=`時數統計_${mFrom}_${mTo}.csv`; a.click();
   toast('已匯出統計 CSV','ok');
 }
 function initStatsMonth(){
-  const sel=document.getElementById('statsMonth'); if(!sel||sel.options.length) return;
-  const months=new Set(); months.add(today().slice(0,7)); S.records.forEach(r=>{ if(r.date) months.add(r.date.slice(0,7)); });
-  [...months].sort((a,b)=>b.localeCompare(a)).forEach(v=>{ const [yr,mo]=v.split('-'); const o=document.createElement('option'); o.value=v; o.textContent=yr+' 年 '+mo+'月'; sel.appendChild(o); });
+  const fromSel=document.getElementById('statsMonthFrom');
+  const toSel=document.getElementById('statsMonthTo');
+  if(!fromSel||!toSel) return;
+  if(fromSel.options.length) return;
+
+  const months=new Set();
+  months.add(today().slice(0,7));
+  S.records.forEach(r=>{ if(r.date) months.add(r.date.slice(0,7)); });
+  const sorted=[...months].sort((a,b)=>a.localeCompare(b));
+
+  sorted.forEach(v=>{
+    const [yr,mo]=v.split('-');
+    const label=yr+' 年 '+mo+'月';
+    const o1=document.createElement('option'); o1.value=v; o1.textContent=label; fromSel.appendChild(o1);
+    const o2=document.createElement('option'); o2.value=v; o2.textContent=label; toSel.appendChild(o2);
+  });
+  // Default: from = earliest month, to = current month
+  fromSel.value = sorted[0];
+  toSel.value   = today().slice(0,7);
+
+  // Populate project and name dropdowns
+  refreshStatsDropdowns();
+}
+
+function refreshStatsDropdowns(){
+  const projSel=document.getElementById('statsQProj');
+  const nameSel=document.getElementById('statsQName');
+  if(!projSel||!nameSel) return;
+  const curProj=projSel.value;
+  const curName=nameSel.value;
+  // Projects from records + local projects list
+  const allProjs=[...new Set([...S.records.map(r=>r.project),...S.projects.map(p=>p.name)])].filter(Boolean).sort();
+  const allNames=[...new Set(S.records.map(r=>r.name))].filter(Boolean).sort();
+  projSel.innerHTML='<option value="">全部案件</option>'+allProjs.map(p=>`<option value="${p}">${p}</option>`).join('');
+  nameSel.innerHTML='<option value="">全部人員</option>'+allNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+  if(curProj) projSel.value=curProj;
+  if(curName) nameSel.value=curName;
 }
 function renderStats(){
-  const sel=document.getElementById('statsMonth'); if(sel&&!sel.options.length){ initStatsMonth(); }
-  const m=sel?.value||today().slice(0,7);
-  const q=(document.getElementById('statsQ')?.value||'').toLowerCase();
-  let data=S.records.filter(r=>r.date.startsWith(m));
-  if(q) data=data.filter(r=>r.project.toLowerCase().includes(q)||r.name.toLowerCase().includes(q));
+  const fromSel=document.getElementById('statsMonthFrom');
+  const toSel=document.getElementById('statsMonthTo');
+  if(fromSel&&!fromSel.options.length){ initStatsMonth(); }
+  const mFrom=fromSel?.value||today().slice(0,7);
+  const mTo  =toSel?.value  ||today().slice(0,7);
+  const qProj=(document.getElementById('statsQProj')?.value||'');
+  const qName=(document.getElementById('statsQName')?.value||'');
+  let data=S.records.filter(r=>{
+    const m=r.date?.slice(0,7)||'';
+    return m>=mFrom && m<=mTo;
+  });
+  if(qProj) data=data.filter(r=>r.project===qProj);
+  if(qName) data=data.filter(r=>r.name===qName);
   const totalH=data.reduce((a,r)=>a+r.hours,0);
   const people=new Set(data.map(r=>r.name)).size;
   const projs=new Set(data.map(r=>r.project)).size;
@@ -1052,8 +1206,8 @@ async function pushToLark(rec){
   const l=S.lark,f=S.fields; if(!l.appId||!l.base||!l.table)return false;
   try{
     const tok=await getLarkToken(); if(!tok)return false;
-    const fields={}; const dateTs=new Date(rec.date+'T00:00:00+08:00').getTime();
-    fields[f.date||'日期']=dateTs; fields[f.name||'姓名']=rec.name;
+    const fields={};
+    fields[f.date||'日期']=rec.date; // plain string e.g. '2026-03-24' fields[f.name||'姓名']=rec.name;
     fields[f.proj||'專案名稱']=rec.project; fields[f.cont||'工作內容']=rec.content;
     fields[f.slot||'時段']=rec.slots; fields[f.hour||'時數（小時）']=rec.hours;
     const r=await fetch(`${PROXY}/lark/records`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:tok,base:l.base,table:l.table,fields})});
@@ -1128,7 +1282,12 @@ function showAdminTab(id){
   document.querySelectorAll('.adm-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('atab-'+id)?.classList.add('active');
   if(id==='records') renderRecords();
-  if(id==='stats'){ const sel=document.getElementById('statsMonth'); if(sel) sel.innerHTML=''; initStatsMonth(); renderStats(); }
+  if(id==='stats'){
+    const f=document.getElementById('statsMonthFrom');
+    const t=document.getElementById('statsMonthTo');
+    if(f) f.innerHTML=''; if(t) t.innerHTML='';
+    initStatsMonth(); refreshStatsDropdowns(); renderStats();
+  }
   if(id==='projects') renderProjects();
   if(id==='contents') renderContents();
 }
